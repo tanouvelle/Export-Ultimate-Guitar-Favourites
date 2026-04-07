@@ -1,0 +1,12 @@
+{
+  "/tab/example-artist/example-song-chords-123456": {
+    "artist_name": "Example Artist",
+    "song": "Example Song",
+    "type": "Chords",
+    "rating": "",
+    "tab_url": "/tab/example-artist/example-song-chords-123456",
+    "chord_text": "Example chord text here",
+    "cached_at": "2026-04-07T12:00:00.000Z",
+    "parse_status": "ok"
+  }
+}

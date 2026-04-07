@@ -1,0 +1,19 @@
+
+`.gitignore`
+```gitignore
+# Real exported libraries
+exports/
+ultimate-guitar-library-*.json
+ultimate-guitar-visible-tabs-*.json
+*.private.json
+
+# Local editor / OS files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Node / build artifacts if you later add a frontend
+node_modules/
+dist/
+build/
