@@ -1,6 +1,11 @@
-# UG MyTabs Exporter
+# Export Ultimate Guitar Favourites
 
-A lightweight Tampermonkey userscript for exporting saved Ultimate Guitar tabs from `https://www.ultimate-guitar.com/user/mytabs` into a local JSON library.
+A Tampermonkey userscript for exporting saved Ultimate Guitar tabs from `https://www.ultimate-guitar.com/user/mytabs` into a local JSON library.
+
+## Why?
+
+This was made so I could use it with 'Freetar' - an open source alternative front-end to ultimate-guitar.com
+Export your favourites tabs into a .JSON file for import into Freetar :)
 
 ## Features
 
