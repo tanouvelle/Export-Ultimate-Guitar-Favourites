@@ -19,7 +19,7 @@ Export your favourites tabs into a .JSON file for import into Freetar :)
 
 1. Install Tampermonkey in Firefox
 2. Create a new userscript
-3. Paste the contents of `ug-mytabs-exporter.user.js`
+3. Paste the contents of `ug-mytabs-exporter.user.js` OR Import from file in Tampermonkey Utilities tab
 4. Open `https://www.ultimate-guitar.com/user/mytabs`
 5. Use the on-page buttons or Tampermonkey menu commands
 
