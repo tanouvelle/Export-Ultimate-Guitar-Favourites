@@ -15,12 +15,6 @@ Export your favourites tabs into a .JSON file for import into Freetar :)
 - Cancel current export
 - Lightweight UI designed to reduce Firefox slowdown
 
-## Notes
-
-This repository contains only the tooling.
-
-Do **not** publish your real exported library publicly if it contains full tab or chord content from Ultimate Guitar. Keep those exports local or in a private repository.
-
 ## Installation
 
 1. Install Tampermonkey in Firefox
@@ -54,4 +48,4 @@ The script exports a JSON object keyed by tab path, for example:
 2. Open 'Advanced' dropdown at the bottom of the page
 3. Import the .JSON file
 4. And that's about it! Play to your hearts content :)
-5. 
+
