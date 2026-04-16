@@ -49,3 +49,6 @@ The script exports a JSON object keyed by tab path, for example:
 3. Import the .JSON file
 4. And that's about it! Play to your hearts content :)
 
+## TODO
+
+- Add ratings
