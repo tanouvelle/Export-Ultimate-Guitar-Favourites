@@ -148,66 +148,104 @@
         return '';
     }
 
-    function extractRating(container) {
-        const direct = getTextFromContainer(container, [
-            '[class*="rating"]',
-            '[data-testid*="rating"]',
-            '[aria-label*="rating"]',
-            '[title*="rating"]'
-        ]);
-        if (direct) {
-            const m = direct.match(/\b(\d(?:\.\d)?)\b/);
-            return m ? m[1] : direct;
+function extractRating(container) {
+    return extractRatingFromContainer(container);
+}
+
+function normalizeRating(value) {
+    if (value == null) return '';
+
+    const text = String(value).trim();
+
+    // Handles "4", "4.5", "Rated 4.8", "4/5", etc.
+    const match = text.match(/\b([0-5](?:\.\d+)?)\b/);
+    return match ? match[1] : '';
+}
+
+function extractRatingFromText(text) {
+    if (!text) return '';
+    return normalizeRating(text);
+}
+
+function extractRatingFromContainer(container) {
+    if (!container) return '';
+
+    const selectors = [
+        '[class*="rating"]',
+        '[data-testid*="rating"]',
+        '[aria-label*="rating"]',
+        '[title*="rating"]',
+        '[class*="stars"]',
+        '[class*="score"]'
+    ];
+
+    for (const sel of selectors) {
+        const node = container.querySelector(sel);
+        if (!node) continue;
+
+        const candidates = [
+            node.getAttribute('aria-label'),
+            node.getAttribute('title'),
+            node.getAttribute('data-rating'),
+            node.textContent
+        ];
+
+        for (const candidate of candidates) {
+            const rating = extractRatingFromText(candidate);
+            if (rating) return rating;
         }
-        return '';
     }
 
-    function extractVisibleEntries() {
-        const anchors = [...document.querySelectorAll('a[href*="/tab/"]')];
-        const out = {};
+    // Fallback: search the whole card text
+    return extractRatingFromText(container.textContent || '');
+}
+    
+function extractVisibleEntries() {
+    const anchors = [...document.querySelectorAll('a[href*="/tab/"]')];
+    const out = {};
 
-        for (const a of anchors) {
-            try {
-                const url = new URL(a.href, location.origin);
-                if (!url.pathname.startsWith('/tab/')) continue;
-                if (out[url.pathname]) continue;
+    for (const a of anchors) {
+        try {
+            const url = new URL(a.href, location.origin);
+            if (!url.pathname.startsWith('/tab/')) continue;
+            if (out[url.pathname]) continue;
 
-                const entry = parseTabInfoFromPath(url.pathname);
-                if (!entry) continue;
+            const entry = parseTabInfoFromPath(url.pathname);
+            if (!entry) continue;
 
-                const container = findBestContainer(a);
-                if (container) {
-                    const nearbyArtist = getTextFromContainer(container, [
-                        '[class*="artist"]',
-                        '[data-testid*="artist"]'
-                    ]);
-                    const nearbySong = getTextFromContainer(container, [
-                        '[class*="song"]',
-                        '[class*="title"]',
-                        '[data-testid*="title"]',
-                        'h1', 'h2', 'h3'
-                    ]);
-                    const nearbyType = getTextFromContainer(container, [
-                        '[class*="type"]',
-                        '[data-testid*="type"]',
-                        '[class*="tag"]'
-                    ]);
-                    const nearbyRating = extractRating(container);
+            const container = findBestContainer(a);
+            if (container) {
+                const nearbyArtist = getTextFromContainer(container, [
+                    '[class*="artist"]',
+                    '[data-testid*="artist"]'
+                ]);
+                const nearbySong = getTextFromContainer(container, [
+                    '[class*="song"]',
+                    '[class*="title"]',
+                    '[data-testid*="title"]',
+                    'h1', 'h2', 'h3'
+                ]);
+                const nearbyType = getTextFromContainer(container, [
+                    '[class*="type"]',
+                    '[data-testid*="type"]',
+                    '[class*="tag"]'
+                ]);
+                const nearbyRating = extractRating(container);
 
-                    if (nearbyArtist) entry.artist_name = nearbyArtist;
-                    if (nearbySong) entry.song = nearbySong;
-                    if (nearbyType) entry.type = nearbyType;
-                    if (nearbyRating) entry.rating = nearbyRating;
-                }
-
-                out[url.pathname] = entry;
-            } catch (err) {
-                log('extractVisibleEntries error', err);
+                if (nearbyArtist) entry.artist_name = nearbyArtist;
+                if (nearbySong) entry.song = nearbySong;
+                if (nearbyType) entry.type = nearbyType;
+                if (nearbyRating) entry.rating = nearbyRating;
             }
-        }
 
-        return out;
+            out[url.pathname] = entry;
+        } catch (err) {
+            log('extractVisibleEntries error', err);
+        }
     }
+
+    return out;
+}
 
     async function autoScrollLoad() {
         let lastHeight = -1;
@@ -293,91 +331,152 @@
         }
     }
 
-    function tryExtractFromScripts(doc, pathname) {
-        const scripts = [...doc.scripts];
-        const fallback = parseTabInfoFromPath(pathname) || {};
+  function deepFindRating(obj) {
+    const seen = new WeakSet();
+    let best = '';
 
-        for (const s of scripts) {
-            const txt = s.textContent || '';
-            if (!txt || txt.length < 100) continue;
+    function walk(value, keyPath = []) {
+        if (!value || typeof value !== 'object') return;
+        if (seen.has(value)) return;
+        seen.add(value);
 
-            if (s.type && s.type.includes('json')) {
-                const parsed = tryParseJson(txt);
-                if (parsed) {
-                    const chordText = deepFindString(parsed, ['content', 'tab', 'wiki_tab', 'tab_view']);
-                    if (chordText) {
-                        return {
-                            chord_text: chordText,
-                            artist_name: fallback.artist_name,
-                            song: fallback.song,
-                            type: fallback.type
-                        };
-                    }
+        if (Array.isArray(value)) {
+            for (const item of value) walk(item, keyPath);
+            return;
+        }
+
+        for (const [k, v] of Object.entries(value)) {
+            const lowerKey = String(k).toLowerCase();
+            const nextPath = keyPath.concat(k);
+
+            if (typeof v === 'string' || typeof v === 'number') {
+                if (
+                    lowerKey.includes('rating') ||
+                    lowerKey.includes('score') ||
+                    lowerKey.includes('stars') ||
+                    nextPath.join('.').toLowerCase().includes('rating')
+                ) {
+                    const parsed = normalizeRating(v);
+                    if (parsed) best = parsed;
                 }
-            }
-
-            if (
-                txt.includes('window.__PRELOADED_STATE__') ||
-                txt.includes('window.__INITIAL_STATE__') ||
-                txt.includes('__NEXT_DATA__') ||
-                txt.includes('wiki_tab') ||
-                txt.includes('tab_view')
-            ) {
-                const contentMatch =
-                    txt.match(/"content"\s*:\s*"((?:[^"\\]|\\.)*)"/) ||
-                    txt.match(/"wiki_tab"\s*:\s*\{[\s\S]*?"content"\s*:\s*"((?:[^"\\]|\\.)*)"/) ||
-                    txt.match(/"tab_view"\s*:\s*\{[\s\S]*?"content"\s*:\s*"((?:[^"\\]|\\.)*)"/);
-
-                if (contentMatch) {
-                    const raw = contentMatch[1]
-                        .replace(/\\"/g, '"')
-                        .replace(/\\n/g, '\n')
-                        .replace(/\\r/g, '\r')
-                        .replace(/\\t/g, '\t')
-                        .replace(/\\\\/g, '\\');
-
-                    if (raw && raw.length > 50) {
-                        return {
-                            chord_text: raw,
-                            artist_name: fallback.artist_name,
-                            song: fallback.song,
-                            type: fallback.type
-                        };
-                    }
-                }
+            } else if (v && typeof v === 'object') {
+                walk(v, nextPath);
             }
         }
-
-        return null;
     }
 
-    function tryExtractFromDom(doc, pathname) {
-        const fallback = parseTabInfoFromPath(pathname) || {};
-        const candidates = [
-            ...doc.querySelectorAll('pre'),
-            ...doc.querySelectorAll('[class*="tab-content"]'),
-            ...doc.querySelectorAll('[class*="js-tab-content"]'),
-            ...doc.querySelectorAll('[data-content]'),
-            ...doc.querySelectorAll('code')
-        ];
+    walk(obj);
+    return best;
+}
 
-        let best = '';
-        for (const el of candidates) {
-            const t = cleanText(el.textContent);
-            if (t.length > best.length) best = t;
+function tryExtractFromScripts(doc, pathname) {
+    const scripts = [...doc.scripts];
+    const fallback = parseTabInfoFromPath(pathname) || {};
+
+    for (const s of scripts) {
+        const txt = s.textContent || '';
+        if (!txt || txt.length < 100) continue;
+
+        if (s.type && s.type.includes('json')) {
+            const parsed = tryParseJson(txt);
+            if (parsed) {
+                const chordText = deepFindString(parsed, ['content', 'tab', 'wiki_tab', 'tab_view']);
+                const rating = deepFindRating(parsed);
+
+                if (chordText || rating) {
+                    return {
+                        chord_text: chordText || '',
+                        artist_name: fallback.artist_name,
+                        song: fallback.song,
+                        type: fallback.type,
+                        rating: rating || ''
+                    };
+                }
+            }
         }
 
-        if (best.length > 100) {
-            return {
-                chord_text: best,
-                artist_name: fallback.artist_name,
-                song: fallback.song,
-                type: fallback.type
-            };
-        }
+        if (
+            txt.includes('window.__PRELOADED_STATE__') ||
+            txt.includes('window.__INITIAL_STATE__') ||
+            txt.includes('__NEXT_DATA__') ||
+            txt.includes('wiki_tab') ||
+            txt.includes('tab_view')
+        ) {
+            const contentMatch =
+                txt.match(/"content"\s*:\s*"((?:[^"\\]|\\.)*)"/) ||
+                txt.match(/"wiki_tab"\s*:\s*\{[\s\S]*?"content"\s*:\s*"((?:[^"\\]|\\.)*)"/) ||
+                txt.match(/"tab_view"\s*:\s*\{[\s\S]*?"content"\s*:\s*"((?:[^"\\]|\\.)*)"/);
 
-        return null;
+            const ratingMatch =
+                txt.match(/"rating"\s*:\s*("?)([0-5](?:\.\d+)?)\1/) ||
+                txt.match(/"score"\s*:\s*("?)([0-5](?:\.\d+)?)\1/);
+
+            const raw = contentMatch
+                ? contentMatch[1]
+                    .replace(/\\"/g, '"')
+                    .replace(/\\n/g, '\n')
+                    .replace(/\\r/g, '\r')
+                    .replace(/\\t/g, '\t')
+                    .replace(/\\\\/g, '\\')
+                : '';
+
+            const rating = ratingMatch ? normalizeRating(ratingMatch[2]) : '';
+
+            if (raw || rating) {
+                return {
+                    chord_text: raw || '',
+                    artist_name: fallback.artist_name,
+                    song: fallback.song,
+                    type: fallback.type,
+                    rating: rating || ''
+                };
+            }
+        }
     }
+
+    return null;
+}
+function tryExtractFromDom(doc, pathname) {
+    const fallback = parseTabInfoFromPath(pathname) || {};
+    const candidates = [
+        ...doc.querySelectorAll('pre'),
+        ...doc.querySelectorAll('[class*="tab-content"]'),
+        ...doc.querySelectorAll('[class*="js-tab-content"]'),
+        ...doc.querySelectorAll('[data-content]'),
+        ...doc.querySelectorAll('code')
+    ];
+
+    let best = '';
+    for (const el of candidates) {
+        const t = cleanText(el.textContent);
+        if (t.length > best.length) best = t;
+    }
+
+    const ratingNode = doc.querySelector(
+        '[class*="rating"], [data-testid*="rating"], [aria-label*="rating"], [title*="rating"], [class*="stars"], [class*="score"]'
+    );
+
+    const rating = ratingNode
+        ? extractRatingFromText(
+            ratingNode.getAttribute('aria-label') ||
+            ratingNode.getAttribute('title') ||
+            ratingNode.textContent ||
+            ''
+        )
+        : '';
+
+    if (best.length > 100 || rating) {
+        return {
+            chord_text: best,
+            artist_name: fallback.artist_name,
+            song: fallback.song,
+            type: fallback.type,
+            rating: rating || ''
+        };
+    }
+
+    return null;
+}
 
     async function parseTabPageThroughIframe(fullUrl) {
         return new Promise((resolve) => {
@@ -513,22 +612,22 @@
 
             if (runState.canceled) break;
 
-            if (parsed.ok) {
-                library[path] = {
-                    ...(library[path] || {}),
-                    artist_name: parsed.artist_name || library[path]?.artist_name || '',
-                    song: parsed.song || library[path]?.song || '',
-                    type: parsed.type || library[path]?.type || '',
-                    rating: library[path]?.rating || '',
-                    tab_url: path,
-                    chord_text: parsed.chord_text,
-                    cached_at: parsed.cached_at,
-                    parse_status: 'ok',
-                    checked_at: nowIso(),
-                    cache_error: ''
-                };
-                runState.succeeded++;
-            } else {
+        if (parsed.ok) {
+            library[path] = {
+                ...(library[path] || {}),
+                artist_name: parsed.artist_name || library[path]?.artist_name || '',
+                song: parsed.song || library[path]?.song || '',
+                type: parsed.type || library[path]?.type || '',
+                rating: parsed.rating || library[path]?.rating || '',
+                tab_url: path,
+                chord_text: parsed.chord_text,
+                cached_at: parsed.cached_at,
+                parse_status: 'ok',
+                checked_at: nowIso(),
+                cache_error: ''
+            };
+            runState.succeeded++;
+        } else {
                 library[path] = {
                     ...(library[path] || {}),
                     tab_url: path,
